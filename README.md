@@ -34,7 +34,7 @@
 중앙 데이터베이스와 Flask 서버를 빌드하고 컨테이너를 올립니다. 호스트 PC의 `.db_data`와 `pgadmin_config` 볼륨 캐시가 자동으로 분리 영구 보존되도록 설계되어 있습니다.
 
 ```bash
-cd ~/rescue_amr_project/database
+cd ~/rescue_amr_backend/database
 # 1. 실행 권한이 없다면 부여 후 인프라 초기화 가동
 chmod +x init_and_run.sh
 ./init_and_run.sh
@@ -51,7 +51,7 @@ docker compose logs -f flask_app
 로봇 도메인 망과 DB 웹 도메인 망 사이에서 가교 역할을 수행하는 브릿지를 실행합니다.
 
 ```bash
-cd ~/rescue_amr_project/turtlebot4_ws
+cd ~/rescue_amr_backend/turtlebot4_ws
 source install/setup.bash
 ros2 run rescue_bt_manager bt_db_bridge.py
 
@@ -63,7 +63,7 @@ ros2 run rescue_bt_manager bt_db_bridge.py
 현장에서 로봇이 얼굴을 인식하고 실시간으로 DB 유사도 검색 기능을 검증해볼 수 있는 분할 더미 노드 스크립트입니다.
 
 ```bash
-cd ~/rescue_amr_project/vision_ws/src/yolo/yolo
+cd ~/rescue_amr_backend/vision_ws/src/yolo/yolo
 python3 dummy_vector.py
 
 ```
