@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import AresShell from "../AresShell";
 
+// 백엔드 API 주소. 배포 시 빌드 환경변수 VITE_API_BASE_URL(예: 터널 HTTPS 주소)로 주입하고,
+// 값이 없으면 로컬 개발 기본값을 사용합니다.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8001";
+
 // 백엔드가 <span class='highlight'> 같은 HTML 태그를 섞어서 보내므로,
 // React에서 이를 그대로 예쁘게 렌더링하기 위한 컴포넌트입니다.
 function HighlightedMessage({ log }) {
@@ -13,7 +17,7 @@ export default function ReportPage() {
   // 🚀 Flask 백엔드에서 실시간 로그 가져오기
   const fetchLogs = async () => {
     try {
-      const response = await fetch("http://127.0.0.1:8001/api/logs");
+      const response = await fetch(`${API_BASE}/api/logs`);
       if (response.ok) {
         const data = await response.json();
         setLogs(data); // 백엔드에서 받은 데이터로 상태 덮어쓰기
