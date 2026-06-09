@@ -8,7 +8,7 @@
 
 본 프레임워크는 로봇 제어 망(ROS2)과 인프라 망(Docker 컨테이너)이 분리되어 톱니바퀴처럼 맞물려 작동합니다.
 
-1. **[YOLO 비전 / AI Dummy Node]**: 현장에서 얼굴 임베딩 벡터(256차원) 포착 후 ROS2 토픽 발행
+1. **[YOLO 비전 / AI Dummy Node]**: 현장에서 얼굴 임베딩 벡터 포착 후 ROS2 토픽 발행
 2. **[ROS2-DB Bridge Node]**: ROS2 토픽을 가로채 백엔드 Flask API로 HTTP POST 라우팅 전달
 3. **[Flask Backend Engine]**: 들어온 임베딩 데이터를 인공지능 전용 PostgreSQL(`pgvector`) 내부 코사인 유사도 연산 매칭 수행 및 인시던트 로그 동시 영구 저장
 4. **[React Live Dashboard]**: 백엔드 REST API를 2초 주기로 폴링(Polling)하여 관제실 Incident Log 피드에 실시간 렌더링 출력
@@ -72,26 +72,41 @@ python3 dummy_vector.py
 
 ## 📊 4. 관제 및 모니터링 확인 방법
 
-### 📺 React 실시간 관제 대시보드 (Port 3000)
+도커(Docker) 환경에서 실행 중인 PostgreSQL 데이터베이스를 pgAdmin 웹 인터페이스를 통해 연결하고 데이터를 확인하는 방법입니다.
 
-* 브라우저 주소창에 `http://localhost:3000` 접속 후 **보고서(Report) 메뉴** 진입
-* 더미 노드가 발행하는 식별 결과에 따라 `[생존자 식별] OO 님 발견` 혹은 `[미식별 대상 감지]` 메시지가 2초 주기로 화면 새로고침 없이 동적 적재되는 피드를 감상합니다.
+## 🛠️ Step 1. pgAdmin 웹 접속
+웹 브라우저를 열고 아래 주소로 접속한 뒤, 제공된 계정 정보로 로그인합니다.
 
-### 🗄️ pgAdmin 4 데이터베이스 웹 GUI 관리 (Port 8080)
+* 접속 주소: http://localhost:8080
+* 로그인 ID: devkibeom@gmail.com
+* 비밀번호: admin_pwd
 
-* **URL**: `http://localhost:8080` 접속
-* **최초 로그인 정보**:
-* Email: `devkibeom@gmail.com`
-* Password: `admin_pwd`
+## 🔌 Step 2. 서버(DB) 연결 등록하기
+로그인 후 좌측 상단 메뉴에서 Add New Server 아이콘을 클릭하고 아래 정보를 입력합니다.
+## 🔹 General 탭
 
+* Name: ARES_DB (원하는 다른 이름으로 설정해도 무방)
 
-* **서버 등록 가이드**: 서버 추가(Add New Server) 클릭 후 `Connection` 탭에 아래 인포메이션 입력
-* Host name/address: `rescue_db`
-* Username: `admin`
-* Password: `rokey1234`
+## 🔹 Connection 탭 (🚨 똑같이 입력)
 
+* Host name/address: rescue_db (도커 내부 통신용 서비스 이름)
+* Port: 5432
+* Maintenance database: rescue_amr_db
+* Username: admin
+* Password: rokey1234
 
-* 데이터 격자 확인: `rescue_amr_db` ➔ `Schemas` ➔ `public` ➔ `Tables` 경로에서 `survivors` 및 `survivor_logs` 테이블의 원시 벡터 인서트 상황을 엑셀 표 구조로 디버깅 가능합니다.
+설정을 모두 입력한 후 하단의 Save 버튼을 눌러 저장합니다.
+
+## 🔍 Step 3. 데이터 확인하기
+연결이 완료되면 좌측 트리 메뉴를 통해 실시간으로 적재된 데이터를 확인할 수 있습니다.
+### 📂 데이터베이스 탐색 경로
+Servers ➔ ARES_DB ➔ Databases ➔ rescue_amr_db ➔ Schemas ➔ public ➔ Tables
+### 📈 실시간 데이터 조회
+
+   1. Tables 경로 아래에 생성된 incident_logs 테이블을 확인합니다.
+   2. 테이블을 마우스 우클릭합니다.
+   3. View/Edit Data ➔ All Rows를 선택합니다.
+   4. 터미널이나 더미 데이터를 통해 전송된 생존자 탐지 기록이 엑셀 표 형태로 실시간 리스트업되는 것을 확인할 수 있습니다.
 
 ---
 
