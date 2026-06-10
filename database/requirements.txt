@@ -4,5 +4,7 @@ flask-cors
 flask-migrate
 python-dotenv
 sqlalchemy
-psycopg2-binary  # Supabase(Postgres) 연결을 위해 필수
+psycopg2-binary
 pgvector
+passlib[bcrypt]
+supabase

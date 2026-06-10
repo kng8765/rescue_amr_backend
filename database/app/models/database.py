@@ -25,6 +25,7 @@ class RescueRobot(db.Model):
     __tablename__ = "rescue_robots"
     id = db.Column(db.String, primary_key=True, index=True)
     status = db.Column(db.String, default="IDLE")  # IDLE, MOVING, SUCCESS, ERROR
+    battery = db.Column(db.Integer, nullable=True)
     pos_x = db.Column(db.Float, nullable=True)
     pos_y = db.Column(db.Float, nullable=True)
 
@@ -40,10 +41,9 @@ class IncidentLog(db.Model):
 class Survivor(db.Model):
     __tablename__ = "survivors"
 
-    # 실제 소방 규격이나 고유 식별 번호 확장을 고려해 String(Varchar)으로 셋팅
+    # 실제 소방 규격이나 주민등록번호 확장을 고려해 String(Varchar)으로 셋팅
     id = db.Column(db.String(50), primary_key=True, index=True)
     name = db.Column(db.String(50), nullable=False)
-    birth_year = db.Column(db.Integer, nullable=True)
     sex = db.Column(db.String(10), nullable=True)
     phone_number = db.Column(db.String(20), nullable=True)
 
@@ -66,3 +66,10 @@ class SurvivorLog(db.Model):
     robot_id = db.Column(db.String(50), default="robot1")
     img_path = db.Column(db.String(255), nullable=True)  # 현장 증거 사진 로컬/서버 경로
     detection_time = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    
+    
+# 로그인 ID, 비밀번호 테이블
+class LoginUser(db.Model):
+    __tablename__ = "login_data"
+    username      = db.Column(db.String(20), primary_key=True) # ID
+    password_hash = db.Column(db.String(255), nullable=False)  # Hash코드로 변경된 비밀번호

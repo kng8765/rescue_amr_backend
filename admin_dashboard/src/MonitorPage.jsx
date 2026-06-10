@@ -4,31 +4,7 @@ import { navigate } from "../aresRouting";
 import useClock from "../useClock";
 
 const API_BASE = "http://localhost:8001/api";
-// 로봇 인덱스(0-based) → WebRTC 브릿지 포트
-// TB_01 (192.168.108.101): run_ares_vision.sh TB_01 8002
-// TB_05 (192.168.108.105): run_ares_vision.sh TB_05 8003
-const WEBRTC_PORT = (idx) => 8002 + idx;
-const WEBRTC_BASE = (idx) => `http://localhost:${WEBRTC_PORT(idx)}`;
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "turn:openrelay.metered.ca:80",  username: "openrelayproject", credential: "openrelayproject" },
-  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
-];
-
-// ICE candidate 수집 완료까지 대기 (최대 timeoutMs)
-function waitForIceGathering(pc, timeoutMs = 1800) {
-  if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(tid);
-      pc.removeEventListener("icegatheringstatechange", onChange);
-      resolve();
-    };
-    const onChange = () => { if (pc.iceGatheringState === "complete") done(); };
-    pc.addEventListener("icegatheringstatechange", onChange);
-    const tid = setTimeout(done, timeoutMs);
-  });
-}
+const WEBRTC_BASE = "http://localhost:8002";
 const POLL_INTERVAL = 3000; // 3초 로봇 상태 폴링
 
 function formatDuration(totalSeconds) {
@@ -66,7 +42,7 @@ function Ring({ percent, tone, label, sub, size = 76 }) {
 }
 
 // ─── 카메라 패널 (WebRTC) ────────────────────────────────────────────────────
-function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
+function CameraPanel({ title, tone, robotId, cameraTime }) {
   const videoRef = useRef(null);
   const pcRef = useRef(null);
   const [connState, setConnState] = useState("idle"); // idle | connecting | connected | error
@@ -77,16 +53,13 @@ function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
 
     setConnState("connecting");
     try {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers: [] });
       pcRef.current = pc;
 
       // 수신 트랙을 video 엘리먼트에 연결
       pc.ontrack = (e) => {
-        const stream = e.streams[0];
-        if (videoRef.current && stream) {
-          videoRef.current.srcObject = stream;
-          // autoPlay만으로 재생 안 되는 브라우저 대응 (팀원 코드 참고)
-          void videoRef.current.play().catch(() => {});
+        if (videoRef.current && e.streams[0]) {
+          videoRef.current.srcObject = e.streams[0];
           setConnState("connected");
         }
       };
@@ -104,9 +77,8 @@ function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await waitForIceGathering(pc); // ICE candidate 수집 완료 후 전송
 
-      const res = await fetch(`${WEBRTC_BASE(robotIndex)}/offer`, {
+      const res = await fetch(`${WEBRTC_BASE}/offer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
@@ -117,15 +89,11 @@ function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
       const answer = await res.json();
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (err) {
-      // ERR_CONNECTION_REFUSED = 로봇 미연결 상태 (정상), warn으로 조용히 처리
-      const msg = err?.message ?? String(err);
-      if (!msg.includes("fetch") && !msg.includes("Failed to fetch")) {
-        console.warn(`[WebRTC][${robotId}]`, msg);
-      }
+      console.error(`[WebRTC][${robotId}] 연결 오류:`, err);
       if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
       setConnState("error");
     }
-  }, [robotId, robotIndex]);
+  }, [robotId]);
 
   // 컴포넌트 마운트 시 자동 연결 시도
   useEffect(() => {
@@ -193,7 +161,7 @@ export default function MonitorPage() {
     return t ? Math.floor((Date.now() - Number(t)) / 1000) : 0;
   };
   const [missionSeconds, setMissionSeconds] = useState(getElapsed);
-  const [robots, setRobots] = useState([]);        // rescue_robots 테이블 — 항상 배열
+  const [robots, setRobots] = useState([]);        // rescue_robots 테이블
   const [survivorStats, setSurvivorStats] = useState({ confirmed: 0, unknown: 0 });
   // 연결 상태 3단계 분리
   // backend: 'ok' | 'error'   — Flask 서버 자체 응답 여부
@@ -225,13 +193,9 @@ export default function MonitorPage() {
     // ── 2단계: 로봇 데이터 파싱 ─────────────────────────────────────
     if (robotRes.ok) {
       const data = await robotRes.json();
-      // endpoints.py가 { db_status, robots: [] } 형태로 반환
-      const robotList = Array.isArray(data.robots) ? data.robots
-                      : Array.isArray(data)        ? data
-                      : [];
-      setRobots(robotList);
-      const dbSt = data.db_status ?? (robotList.length === 0 ? 'empty' : 'ok');
-      setConnStatus({ backend: 'ok', db: dbSt });
+      setRobots(data);
+      // 응답은 왔지만 테이블이 비어있는 경우
+      setConnStatus({ backend: 'ok', db: data.length === 0 ? 'empty' : 'ok' });
     } else {
       setConnStatus({ backend: 'ok', db: 'error' });
     }
@@ -279,7 +243,7 @@ export default function MonitorPage() {
               <div className="dash-center">
                 <div className="sub-header split">
                   <span><span className="dot green" />지도</span>
-                  {connStatus.backend === 'error' && <span style={{ color: 'var(--red-light)', fontSize: '0.75rem' }}>⚠ 서버 오프라인</span>}{connStatus.db === 'empty' && <span style={{ color: '#f59e0b', fontSize: '0.75rem' }}>⚠ 로봇 미연결</span>}
+                  {connStatus.backend === 'error' && <span style={{ color: 'var(--red-light)', fontSize: '0.75rem' }}>⚠ 서버 오프라인</span>}{connStatus.db === 'empty' && <span style={{ color: 'var(--yellow)', fontSize: '0.75rem' }}>⚠ 로봇 미연결</span>}
                 </div>
                 <div className="map-area">
                   <div className="map-svg-bg" />
@@ -289,7 +253,7 @@ export default function MonitorPage() {
                       로봇 데이터 없음
                     </div>
                   )}
-                  {Array.isArray(robots) && robots.map((robot, i) => {
+                  {robots.map((robot, i) => {
                     const x = toMapPct(robot.pos_x);
                     const y = toMapPct(robot.pos_y);
                     if (x == null || y == null) return null;
@@ -344,7 +308,7 @@ export default function MonitorPage() {
               <StatusBadge icon="ti-database-off" color="var(--red-light)"
                 msg="DB 쿼리 오류 — rescue_robots 테이블을 확인하세요" />
             ) : connStatus.db === 'empty' ? (
-              <StatusBadge icon="ti-robot-off" color="#f59e0b"
+              <StatusBadge icon="ti-robot-off" color="var(--yellow)"
                 msg="로봇 데이터 없음 — bt_db_bridge 실행 여부 확인" />
             ) : (
               <>
@@ -406,13 +370,12 @@ export default function MonitorPage() {
 
         {/* ── 카메라 패널 (WebRTC) ──────────────────────────────────────── */}
         {/* 로봇이 있으면 첫 두 대, 없으면 기본 2개 슬롯 */}
-        {(Array.isArray(robots) && robots.length > 0 ? robots.slice(0, 2) : [{ id: "ROBOT-01" }, { id: "ROBOT-02" }]).map((robot, i) => (
+        {(robots.length > 0 ? robots.slice(0, 2) : [{ id: "ROBOT-01" }, { id: "ROBOT-02" }]).map((robot, i) => (
           <CameraPanel
             key={robot.id}
             title={`카메라 · ${robot.id}`}
             tone={i === 0 ? "green" : "orange"}
             robotId={robot.id}
-            robotIndex={i}
             cameraTime={cameraTime}
           />
         ))}

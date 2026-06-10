@@ -1,5 +1,5 @@
 from app.main import app
-from app.models.database import db, IncidentLog, RescueRobot
+from app.models.database import db
 from app.core import config
 
 if __name__ == "__main__":

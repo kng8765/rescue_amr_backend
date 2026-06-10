@@ -27,14 +27,19 @@
 .ares-app {
   width: 100vw;
   height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
   overflow: hidden;
   display: flex;
   background: var(--bg);
   color: var(--text);
   font-family: 'Noto Sans KR', sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
 }
 
-.ares-app-compact { --sidebar: 90px; }
+/* compact는 topbar/내부 요소만 작게, 사이드바 너비는 고정 */
 
 .ares-sidebar {
   width: var(--sidebar);
@@ -436,6 +441,32 @@ td { padding: 10px 1.2rem; font-size: 13px; color: var(--text2); vertical-align:
   overflow: hidden;
   min-height: 0;
 }
+
+/* 모니터링 페이지 전용 레이아웃: MAP 크게(상단 60%), 카메라/상태 작게(하단 40%) */
+.grid-monitor {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 260px;
+  grid-template-rows: 3fr 2fr;
+  gap: 6px;
+  padding: 6px;
+  overflow: hidden;
+  min-height: 0;
+}
+/* MAP 패널: 상단 좌우 2열 차지 */
+.grid-monitor .gui-cell {
+  grid-row: 1;
+  grid-column: 1 / 3;
+}
+/* 상태 패널: 우측 전체 높이 */
+.grid-monitor .status-cell {
+  grid-row: 1 / 3;
+  grid-column: 3;
+}
+/* 카메라 1, 2: 하단 2열 */
+.grid-monitor .cam-cell {
+  grid-row: 2;
+}
 .cell {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -522,4 +553,153 @@ td { padding: 10px 1.2rem; font-size: 13px; color: var(--text2); vertical-align:
   .summary-row, .report-summary, .main-grid { grid-template-columns: 1fr; }
   .today-banner { flex-direction: column; align-items: flex-start; }
   .grid-2x2 { grid-template-columns: 1fr; grid-template-rows: repeat(4, minmax(340px, 1fr)); overflow-y: auto; }
+}
+
+/* ── 로그아웃 다이얼로그 ── */
+.logout-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logout-dialog {
+  background: #fff;
+  border-radius: 14px;
+  padding: 2rem 2.2rem 1.6rem;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  min-width: 260px;
+}
+.logout-dialog-icon { font-size: 32px; margin-bottom: 0.5rem; }
+.logout-dialog-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+.logout-dialog-msg { font-size: 13px; color: var(--text3); margin-bottom: 1.4rem; }
+.logout-dialog-btns { display: flex; gap: 10px; justify-content: center; }
+.logout-dialog-cancel {
+  padding: 9px 22px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text2); font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.logout-dialog-cancel:hover { background: var(--border); }
+.logout-dialog-confirm {
+  padding: 9px 22px; border-radius: 8px; border: none;
+  background: var(--red); color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.logout-dialog-confirm:hover { background: var(--red-dark); }
+
+/* sidebar-logo — 버튼 아닌 div로 변경 후 스타일 유지 */
+.sidebar-logo {
+  width: 100%;
+  background: var(--red-dark);
+  padding: 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+
+/* ── Report: 2열 stat ── */
+.report-summary-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+/* ── Monitor: 생존자 카운트 크게 ── */
+.casualty-grid-lg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.casualty-box-lg {
+  border-radius: 8px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.casualty-box-lg.survivor { background: #f0fdf4; border: 1px solid rgba(46,125,50,0.2); }
+.casualty-box-lg.unknown  { background: var(--surface2); border: 1px solid var(--border); }
+.casualty-num-lg { font-size: 28px; font-weight: 800; font-family: var(--mono); }
+.casualty-box-lg.survivor .casualty-num-lg { color: var(--green); }
+.casualty-box-lg.unknown  .casualty-num-lg { color: var(--text3); }
+.casualty-label-lg { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+
+/* ── Monitor: 링 차트 가로 나열 ── */
+.ring-row {
+  display: flex;
+  justify-content: space-around;
+  margin: 8px 0;
+}
+
+/* ── 태블릿 반응형 (≤1100px) ── */
+@media (max-width: 1100px) {
+  .grid-monitor {
+    grid-template-columns: 1fr 220px;
+    grid-template-rows: 1fr 1fr 1fr;
+  }
+  .grid-monitor .gui-cell  { grid-row: 1; grid-column: 1 / 2; }
+  .grid-monitor .status-cell { grid-row: 1 / 3; grid-column: 2; }
+  .grid-monitor .cam-cell  { grid-row: 2; grid-column: 1; }
+  .grid-monitor .cam-cell:last-child { grid-row: 3; grid-column: 1 / 3; }
+}
+
+/* ── 모바일/소형 태블릿 (≤768px) ── */
+@media (max-width: 768px) {
+  :root { --sidebar: 64px; }
+  .nav-item { width: 56px; padding: 8px 4px; }
+  .nav-item .icon { font-size: 20px; }
+  .nav-item span { font-size: 8px; }
+  .sidebar-logo { padding: 0.7rem 0.3rem; }
+  .sidebar-logo span:last-child { font-size: 8px; }
+  .ares-topbar { height: 48px; padding: 0 1rem; }
+  .topbar-title { font-size: 13px; }
+  .topbar-sub { display: none; }
+  .user-name { display: none; }
+
+  .grid-monitor {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow-y: auto;
+    height: auto;
+  }
+  .grid-monitor .gui-cell    { grid-row: auto; grid-column: auto; min-height: 300px; }
+  .grid-monitor .status-cell { grid-row: auto; grid-column: auto; }
+  .grid-monitor .cam-cell    { grid-row: auto; grid-column: auto; min-height: 200px; }
+
+  .summary-row { grid-template-columns: 1fr 1fr; }
+  .report-summary-2 { grid-template-columns: 1fr 1fr !important; }
+  .main-grid { grid-template-columns: 1fr; }
+  .detail-panel { display: none; }
+
+  .content { padding: 0.8rem; }
+  .today-banner { flex-direction: column; align-items: flex-start; gap: 0.8rem; }
+  .banner-stats { gap: 1rem; }
+}
+
+/* ── 연결 상태 배너 (모니터링 상태 패널) ── */
+.conn-banner {
+  font-size: 0.78rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.conn-banner.error {
+  background: color-mix(in srgb, var(--red-light) 12%, transparent);
+  color: var(--red-light);
+  border: 1px solid color-mix(in srgb, var(--red-light) 30%, transparent);
+}
+.conn-banner.warn {
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: #f59e0b;
+  border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+}
+.conn-hint {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  padding-left: 1.2rem;
 }

@@ -196,6 +196,7 @@ export default function AresLogin() {
     }
 
     if (!LOGIN_API_URL) {
+      sessionStorage.setItem("ares_login_time", Date.now());
       window.location.hash = "worker";
       return;
     }
@@ -209,6 +210,7 @@ export default function AresLogin() {
       });
       const data = await res.json();
       if (res.ok && data.ok) {
+        sessionStorage.setItem("ares_login_time", Date.now());
         window.location.hash = "worker";
       } else {
         setError("⚠ 아이디 또는 비밀번호가 올바르지 않습니다.");
