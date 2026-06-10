@@ -16,7 +16,7 @@ class SurvivorRepository:
     def match_survivor_by_vector(vector_str: str):
         """pgvector 기반 코사인 유사도 매칭 쿼리 실행"""
         query_text = db.text("""
-            SELECT id, name, birth_year, sex, phone_number,
+            SELECT id, name, sex, phone_number,
                    (1 - (face_vector <=> CAST(:vec AS vector))) * 100 AS similarity
             FROM survivors
             WHERE face_vector IS NOT NULL

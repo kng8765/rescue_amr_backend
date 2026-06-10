@@ -18,6 +18,7 @@ def update_robot_pose(robot_id):
         x=data.get("x", 0.0),
         y=data.get("y", 0.0),
         status=data.get("status"),
+        battery=data.get("battery"),
     )
     return jsonify({"ok": True}), 200
 
@@ -81,14 +82,20 @@ def identify_survivor():
     data = request.get_json()
     input_vector = data.get("vector")
 
+    # 💡 실시간 디버깅을 위해 flush=True 로그 추가
+    print(
+        f"\n📥 [API 엔드포인트] /survivors/identify 요청 수신 (벡터 길이: {len(input_vector) if input_vector else 0})",
+        flush=True,
+    )
+
     try:
         res_body, status_code = SurvivorService.identify_survivor_by_vector(
             input_vector
         )
-        # 성공/실패 여부와 상관없이 비즈니스 결과 규격에 맞추어 리턴
         return jsonify({"status": "success", **res_body}), status_code
     except Exception as e:
-        print(f"❌ [백엔드 오퍼레이션] SQLAlchemy 내부 연산 실패 상세 원인: {str(e)}")
+        # 💡 에러 발생 시 즉시 터미널에 출력되도록 flush=True 설정
+        print(f"❌ [API 엔드포인트] 매칭 연산 실패 상세 원인: {str(e)}", flush=True)
         return jsonify({"status": "success", "matched": False, "message": str(e)}), 200
 
 

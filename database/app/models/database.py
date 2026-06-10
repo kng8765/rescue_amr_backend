@@ -29,6 +29,8 @@ class RescueRobot(db.Model):
     pos_x = db.Column(db.Float, nullable=True)
     pos_y = db.Column(db.Float, nullable=True)
 
+    explored_area = db.Column(db.Float, nullable=True, default=0.0)
+    total_area = db.Column(db.Float, nullable=True, default=0.0)
 
 class IncidentLog(db.Model):
     __tablename__ = "incident_logs"
@@ -48,7 +50,7 @@ class Survivor(db.Model):
     phone_number = db.Column(db.String(20), nullable=True)
 
     # YOLO/FaceNet 등에서 추출한 256차원 얼굴 임베딩 벡터 저장 공간
-    face_vector = db.Column(Vector(256), nullable=True)
+    face_vector = db.Column(Vector(512), nullable=True)
 
 
 # 고도화된 실시간 구조 로그 테이블

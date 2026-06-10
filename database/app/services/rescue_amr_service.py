@@ -31,16 +31,23 @@ class RescueAMRService:
             raise e
         
     @staticmethod
-    def update_pose(robot_id: str, x: float, y: float, status: str = None):
+    def update_pose(
+        robot_id: str, x: float, y: float, status: str = None, battery: int = None
+    ):
         """로봇 위치·상태 upsert — 없으면 신규 생성, 있으면 갱신"""
         robot = RescueAmrRepository.get_robot_by_id(robot_id)
         if not robot:
             robot = RescueRobot(id=robot_id)
+
         robot.pos_x = x
         robot.pos_y = y
         if status:
             robot.status = status
+        if battery is not None:
+            robot.battery = battery  # 💡 [추가] 배터리 모델 적용
+
         RescueAmrRepository.save_robot(robot)
+        db.session.commit()  
 
     @staticmethod
     def update_exploration(robot_id: str, explored_area: float, total_area: float):
@@ -48,7 +55,13 @@ class RescueAMRService:
         robot = RescueAmrRepository.get_robot_by_id(robot_id)
         if not robot:
             robot = RescueRobot(id=robot_id)
+
+        robot.explored_area = explored_area  # 💡 [추가] 모델에 값 할당
+        robot.total_area = total_area  # 💡 [추가] 모델에 값 할당
+
         if total_area > 0:
             pct = explored_area / total_area
             robot.status = "SUCCESS" if pct >= 1.0 else "MOVING"
+
         RescueAmrRepository.save_robot(robot)
+        db.session.commit()  

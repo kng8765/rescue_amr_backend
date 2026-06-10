@@ -75,11 +75,8 @@ python3 dummy_vector.py
 도커(Docker) 환경에서 실행 중인 PostgreSQL 데이터베이스를 pgAdmin 웹 인터페이스를 통해 연결하고 데이터를 확인하는 방법입니다.
 
 ## 🛠️ Step 1. pgAdmin 웹 접속
-웹 브라우저를 열고 아래 주소로 접속한 뒤, 제공된 계정 정보로 Supabase에 가상 계정 정보가 저장되어 있습니다.
+웹 브라우저를 열고 아래 주소로 접속한 뒤, 제공된 계정 정보로 로그인합니다.
 
-ID - fuoco1234
-
-비밀번호 - 1234
 * 접속 주소: http://localhost:8080
 * 로그인 ID: devkibeom@gmail.com
 * 비밀번호: admin_pwd
@@ -112,6 +109,13 @@ Servers ➔ ARES_DB ➔ Databases ➔ rescue_amr_db ➔ Schemas ➔ public ➔ T
    4. 터미널이나 더미 데이터를 통해 전송된 생존자 탐지 기록이 엑셀 표 형태로 실시간 리스트업되는 것을 확인할 수 있습니다.
 
 ---
+
+## Step 4. 웹 UI 접속하기
+http://localhost:3000에 접속하고 아래 정보로 로그인합니다.
+Supabase에 가상 계정 정보가 저장되어 있습니다.
+
+ID - fuoco1234
+비밀번호 - 1234
 
 ## ⚠️ 5. 주의 사항 및 커스텀 가이드 (개발자 노트)
 
