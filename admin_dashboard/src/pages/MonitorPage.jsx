@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AresShell from "../AresShell";
 import { navigate } from "../aresRouting";
 import useClock from "../useClock";
@@ -66,7 +66,7 @@ function Ring({ percent, tone, label, sub, size = 76 }) {
 }
 
 // ─── 카메라 패널 (WebRTC) ────────────────────────────────────────────────────
-function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
+function CameraPanel({ title, tone, robotId, robotIndex, cameraTime, onTelemetry }) {
   const videoRef = useRef(null);
   const pcRef = useRef(null);
   const [connState, setConnState] = useState("idle"); // idle | connecting | connected | error
@@ -79,6 +79,13 @@ function CameraPanel({ title, tone, robotId, robotIndex, cameraTime }) {
     try {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcRef.current = pc;
+
+      // 영상 트랙을 받기 전에 데이터 채널(telemetry) 선제 개방
+      const dataChannel = pc.createDataChannel("telemetry");
+      dataChannel.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (onTelemetry) onTelemetry(robotId, data); // 부모에게 실시간 데이터 전달
+      };
 
       // 수신 트랙을 video 엘리먼트에 연결
       pc.ontrack = (e) => {
@@ -192,9 +199,14 @@ export default function MonitorPage() {
     const t = sessionStorage.getItem("ares_login_time");
     return t ? Math.floor((Date.now() - Number(t)) / 1000) : 0;
   };
+
   const [missionSeconds, setMissionSeconds] = useState(getElapsed);
   const [robots, setRobots] = useState([]);        // rescue_robots 테이블 — 항상 배열
+  const [liveTelemetry, setLiveTelemetry] = useState({});
   const [survivorStats, setSurvivorStats] = useState({ confirmed: 0, unknown: 0 });
+  const [robotPaths, setRobotPaths] = useState({});
+  const [cameraCoverage, setCameraCoverage] = useState({});
+
   // 연결 상태 3단계 분리
   // backend: 'ok' | 'error'   — Flask 서버 자체 응답 여부
   // db:      'ok' | 'empty' | 'error'  — 테이블 데이터 존재 여부
@@ -282,7 +294,81 @@ export default function MonitorPage() {
                   {connStatus.backend === 'error' && <span style={{ color: 'var(--red-light)', fontSize: '0.75rem' }}>⚠ 서버 오프라인</span>}{connStatus.db === 'empty' && <span style={{ color: '#f59e0b', fontSize: '0.75rem' }}>⚠ 로봇 미연결</span>}
                 </div>
                 <div className="map-area">
-                  <div className="map-svg-bg" />
+                  {/* flask static 폴더의 실시간 PNG 지도로 바인딩 */}
+                  <img 
+                    src={`http://localhost:8001/static/maps/robot5_map.png?t=${Date.now()}`} // 캐시 방지 타임스탬프 탑재
+                    alt="ARES SLAM MAP"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }}
+                    onError={(e) => {
+                      // 지도가 아직 생성 전이라 404가 뜰 경우를 대비한 기본 그리드 배경 방어선
+                      e.target.style.display = 'none'; 
+                    }}
+                  />
+                  <div className="map-svg-bg" style={{ position: "absolute", inset: 0, zIndex: 0 }} />
+                  
+                  {/* WebRTC로 들어오는 카메라 가시 영역 레이어 드로잉 */}
+                  {Object.keys(cameraCoverage).map((id) => {
+                    const points = cameraCoverage[id] || [];
+                    return points.map((p, idx) => {
+                      const pctX = toMapPct(p.x);
+                      const pctY = toMapPct(p.y);
+                      if (pctX === null || pctY === null) return null;
+                      return (
+                        <div
+                          key={`${id}-cov-${idx}`}
+                          style={{
+                            position: "absolute",
+                            left: `${pctX}%`,
+                            top: `${pctY}%`,
+                            width: "12px",
+                            height: "12px",
+                            transform: "translate(-50%, -50%)",
+                            background: "rgba(46, 204, 113, 0.15)", // 투명한 초록색 음영 칠하기
+                            borderRadius: "50%",
+                            pointerEvents: "none",
+                            zIndex: 3,
+                          }}
+                        />
+                      );
+                    });
+                  })}
+
+                  {/* 실시간 궤적을 그리는 SVG 오버레이 선 생성 */}
+                  <svg 
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }}
+                      viewBox="0 0 100 100" 
+                    >
+                      {/* [추가] 카메라 가시 영역을 연한 초록색 다각형(또는 선)으로 채우기 */}
+                      {Object.keys(cameraCoverage).map((id) => {
+                        const points = cameraCoverage[id] || [];
+                        if (points.length < 2) return null;
+
+                        const coveragePointsStr = points
+                          .map(p => {
+                            const xPct = toMapPct(p.x);
+                            // 💡 만약 지도가 뒤집혀서 나온다면 100 - toMapPct(p.y) 형태로 Y축을 반전해보세요.
+                            const yPct = toMapPct(p.y); 
+                            return `${xPct},${yPct}`;
+                          })
+                          .join(" ");
+
+                        return (
+                          <polygon
+                            key={`${id}-coverage`}
+                            points={coveragePointsStr}
+                            fill="rgba(46, 204, 113, 0.15)" // 이미지에 있던 투명한 초록색 음영
+                            stroke="rgba(46, 204, 113, 0.5)" // 경계선은 조금 더 진하게
+                            strokeWidth="1"
+                          />
+                        );
+                      })}
+
+                      {/* 기존 로봇 궤적 (polyline) 코드 위치 */}
+                      {Object.keys(robotPaths).map((id) => {
+                        // ... 기존 polyline 렌더링 코드
+                      })}
+                    </svg>
+
                   {/* DB에서 받은 로봇 마커 */}
                   {robots.length === 0 && connStatus.backend === 'ok' && (
                     <div className="cam-no-signal" style={{ position: "absolute", inset: 0, background: "transparent", fontSize: "0.8rem" }}>
@@ -290,14 +376,25 @@ export default function MonitorPage() {
                     </div>
                   )}
                   {Array.isArray(robots) && robots.map((robot, i) => {
-                    const x = toMapPct(robot.pos_x);
-                    const y = toMapPct(robot.pos_y);
-                    if (x == null || y == null) return null;
+                    // WebRTC 실시간 좌표 우선 추종
+                    const currentX = liveTelemetry[robot.id]?.pos_x ?? robot.pos_x;
+                    const currentY = liveTelemetry[robot.id]?.pos_y ?? robot.pos_y;
+                    
+                    const x = toMapPct(currentX);
+                    const y = toMapPct(currentY);
+                    
+                    // 💡 좌표 가독성 오류나 유실 시 렌더링 스킵 방어선
+                    if (x === null || y === null || isNaN(x) || isNaN(y)) return null;
+                    
                     return (
                       <div
                         key={robot.id}
                         className={`robot-marker ${i > 0 ? "orange" : ""}`}
-                        style={{ left: `${x}%`, top: `${y}%` }}
+                        style={{ 
+                          left: `${x}%`, 
+                          top: `${y}%`, 
+                          transition: "left 0.15s linear, top 0.15s linear" // 💡 순간이동 현상을 완전히 지워버리는 리액트 선형 보간 트랜지션
+                        }}
                         title={`${robot.id} — ${robot.status}`}
                       >
                         🤖
@@ -387,15 +484,20 @@ export default function MonitorPage() {
                 {connStatus.backend === 'error' ? "서버 오프라인" : "로봇 미연결"}
               </div>
             ) : (
-              robots.map((robot) => (
-                <RobotStatus
-                  key={robot.id}
-                  name={robot.id}
-                  status={robot.status}
-                  battery={robot.battery ?? null}
-                  color={robotColor(robot.status)}
-                />
-              ))
+              robots.map((robot) => {
+                // DB 배터리보다 WebRTC 실시간 배터리를 우선 적용
+                const currentBattery = liveTelemetry[robot.id]?.battery ?? robot.battery ?? null;
+                
+                return (
+                  <RobotStatus
+                    key={robot.id}
+                    name={robot.id}
+                    status={robot.status}
+                    battery={currentBattery} 
+                    color={robotColor(robot.status)}
+                  />
+                );
+              })
             )}
 
             <button className="report-link wide" type="button" onClick={() => navigate("report")}>
@@ -405,7 +507,6 @@ export default function MonitorPage() {
         </section>
 
         {/* ── 카메라 패널 (WebRTC) ──────────────────────────────────────── */}
-        {/* 로봇이 있으면 첫 두 대, 없으면 기본 2개 슬롯 */}
         {(Array.isArray(robots) && robots.length > 0 ? robots.slice(0, 2) : [{ id: "ROBOT-01" }, { id: "ROBOT-02" }]).map((robot, i) => (
           <CameraPanel
             key={robot.id}
@@ -414,6 +515,32 @@ export default function MonitorPage() {
             robotId={robot.id}
             robotIndex={i}
             cameraTime={cameraTime}
+            // 자식(WebRTC)이 데이터를 받으면 부모의 State 업데이트
+            onTelemetry={(id, data) => {
+              if (data.type === "battery") {
+                setLiveTelemetry(prev => ({ ...prev, [id]: { ...prev[id], battery: data.value } }));
+              }
+              else if (data.type === "path") {
+                // 1. 궤적 선 데이터 누적
+                setRobotPaths(prev => ({ ...prev, [id]: data.poses }));
+              }
+              else if (data.type === "camera_coverage") {
+                setCameraCoverage(prev => ({ ...prev, [id]: data.points }));
+
+                // 2. [추가] 경로 데이터의 가장 마지막 좌표(최신 위치)를 캡처하여 로봇 마커 위치도 실시간 강제 갱신
+                if (data.poses && data.poses.length > 0) {
+                  const latestPose = data.poses[data.poses.length - 1];
+                  setLiveTelemetry(prev => ({
+                    ...prev,
+                    [id]: {
+                      ...prev[id],
+                      pos_x: latestPose.x,
+                      pos_y: latestPose.y
+                    }
+                  }));
+                }
+              }
+            }}
           />
         ))}
       </main>

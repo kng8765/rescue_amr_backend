@@ -1,0 +1,9 @@
+source;share/ares_bridges/hook/pythonpath.ps1
+source;share/ares_bridges/hook/pythonpath.dsv
+source;share/ares_bridges/hook/pythonpath.sh
+source;share/ares_bridges/hook/ament_prefix_path.ps1
+source;share/ares_bridges/hook/ament_prefix_path.dsv
+source;share/ares_bridges/hook/ament_prefix_path.sh
+source;../../build/ares_bridges/share/ares_bridges/hook/pythonpath_develop.ps1
+source;../../build/ares_bridges/share/ares_bridges/hook/pythonpath_develop.dsv
+source;../../build/ares_bridges/share/ares_bridges/hook/pythonpath_develop.sh

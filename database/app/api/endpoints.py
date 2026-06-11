@@ -2,6 +2,7 @@ import uuid
 import threading
 import urllib.request
 import cv2
+import os
 import numpy as np
 import bcrypt as _bcrypt
 from flask import Blueprint, request, jsonify, current_app
@@ -183,7 +184,37 @@ def get_robots():
     except Exception as e:
         return jsonify({"db_status": "error", "detail": str(e), "robots": []}), 200
 
+@api_bp.route("/robots/<robot_id>/map", methods=["POST"])
+def upload_robot_map(robot_id):
+    """💡 [추가] 브릿지 노드가 가공한 PNG 맵 이미지를 수신하여 정적 폴더에 저장"""
+    if "map_image" not in request.files:
+        return jsonify({"error": "No map file content"}), 400
 
+    file = request.files["map_image"]
+    if file.filename == "":
+        return jsonify({"error": "No filename"}), 400
+
+    try:
+        # Flask 어플리케이션의 내부 static 폴더 내부에 'maps' 디렉토리 경로 지정
+        # 예: /workspace/app/static/maps/
+        static_maps_dir = os.path.join(current_app.static_folder, "maps")
+
+        # 폴더가 없으면 에러 방지를 위해 자동 생성
+        if not os.path.exists(static_maps_dir):
+            os.makedirs(static_maps_dir, exist_ok=True)
+
+        # 저장될 파일명 확정 (예: robot5_map.png)
+        filename = f"{robot_id}_map.png"
+        file_path = os.path.join(static_maps_dir, filename)
+
+        # 기존 맵 이미지 위에 새로운 실시간 맵을 덮어쓰기(Overwrite)
+        file.save(file_path)
+
+        return jsonify({"ok": True, "path": f"/static/maps/{filename}"}), 200
+    except Exception as e:
+        print(f"❌ [API] 지반 지도 파일 저장 실패: {str(e)}", flush=True)
+        return jsonify({"error": str(e)}), 500
+    
 @api_bp.route("/robots/<robot_id>/pose", methods=["POST"])
 def update_robot_pose(robot_id):
     data = request.get_json()

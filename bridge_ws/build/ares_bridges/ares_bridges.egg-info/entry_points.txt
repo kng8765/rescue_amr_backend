@@ -1,0 +1,5 @@
+[console_scripts]
+ai_vision_bridge = ares_bridges.ai_vision_bridge:main
+robot_status_bridge = ares_bridges.robot_status_bridge:main
+webrtc_bridge = ares_bridges.webrtc_bridge:main
+

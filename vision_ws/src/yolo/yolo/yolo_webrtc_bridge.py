@@ -16,13 +16,16 @@ from cv_bridge import CvBridge
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from av import VideoFrame
+from sensor_msgs.msg import BatteryState
 
 # 글로벌 프레임 공유 자원 및 커넥션 관리
 latest_frame = None
 frame_lock = threading.Lock()
 pcs = set()
+active_datachannels = set()
 _ROBOT_ID = "robot1"
 
+main_loop = None
 
 class RosImageTrack(MediaStreamTrack):
     """ROS2 토픽 이미지를 WebRTC 비디오 트랙으로 변환하는 클래스"""
@@ -91,16 +94,16 @@ class YoloWebRtcBridge(Node):
         super().__init__("yolo_webrtc_bridge")
         self.bridge = CvBridge()
 
-        # 💡 ROS2 공식 Parameter API 선언
+        # ROS2 공식 Parameter API 선언
         self.declare_parameter("port", 8002)
-        self.declare_parameter("topic", "rgb_processed/compressed")
-        self.declare_parameter("robot", "robot1")
+        self.declare_parameter("topic", "/robot5/survivor/annotated")
+        self.declare_parameter("robot", "robot5")
 
         self.port = self.get_parameter("port").value
         self.topic_name = self.get_parameter("topic").value
         self.robot_id = self.get_parameter("robot").value
 
-        # 💡 기범님의 설계 원칙 반영: 영상 스트리밍 특화 QoS 설정 (BEST_EFFORT & 깊이 1)
+        # 영상 스트리밍 특화 QoS 설정 (BEST_EFFORT & 깊이 1)
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
@@ -111,11 +114,42 @@ class YoloWebRtcBridge(Node):
             CompressedImage, self.topic_name, self.image_callback, qos_profile
         )
 
+        self.battery_sub = self.create_subscription(
+            BatteryState, f"/{self.robot_id}/battery_state", self.battery_callback, 10
+        )
+
         # 30프레임 주기 로그용 변수
         self.frame_cnt = 0
         self.get_logger().info(
             f"👀 [{self.robot_id}] 브릿지 가동! 구독 토픽: {self.topic_name} (BEST_EFFORT)"
         )
+
+    def battery_callback(self, msg):
+        if not active_datachannels:
+            return
+
+        payload = json.dumps(
+            {
+                "type": "battery",
+                "value": round(msg.percentage * 100, 1)
+                if msg.percentage <= 1.0
+                else round(msg.percentage, 1),
+            }
+        )
+
+        # WebRTC 전송 로직을 별도 함수로 묶음
+        def _send_telemetry():
+            for channel in list(active_datachannels):
+                if channel.readyState == "open":
+                    try:
+                        channel.send(payload)
+                    except Exception as e:
+                        self.get_logger().error(f"데이터 채널 전송 에러: {e}")
+
+        # 메인 스레드(비동기 이벤트 루프)에 안전하게 실행을 위임
+        global main_loop
+        if main_loop and not main_loop.is_closed():
+            main_loop.call_soon_threadsafe(_send_telemetry)
 
     def image_callback(self, msg):
         global latest_frame
@@ -146,6 +180,18 @@ async def handle_offer(request):
     pc = RTCPeerConnection()
     pcs.add(pc)
     pc.addTrack(RosImageTrack())
+
+    # 프론트엔드가 'telemetry' 채널을 열면 수락하고 Set에 등록
+    @pc.on("datachannel")
+    def on_datachannel(channel):
+        print(
+            f"⚡ [{_ROBOT_ID}] WebRTC 데이터 채널 [{channel.label}] 연결됨!", flush=True
+        )
+        active_datachannels.add(channel)
+
+        @channel.on("close")
+        def on_close():
+            active_datachannels.discard(channel)
 
     @pc.on("connectionstatechange")
     async def on_state():
@@ -186,6 +232,7 @@ async def handle_options(request):
 
 
 def main():
+    global main_loop
     rclpy.init(args=sys.argv)
     node = YoloWebRtcBridge()
 
