@@ -3,9 +3,10 @@ import AresLogin from "./AresLogin";
 import "./AresPages.css";
 import MonitorPage from "./pages/MonitorPage";
 import ReportPage from "./pages/ReportPage";
+import SyncPage from "./pages/SyncPage";
 import WorkerPage from "./pages/WorkerPage";
 
-const pages = ["worker", "monitor", "report"];
+const pages = ["worker", "monitor", "report", "sync"];
 
 function getRoute() {
   const route = window.location.hash.replace("#", "");
@@ -21,6 +22,7 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
+  if (route === "sync") return <SyncPage />;
   if (route === "worker") return <WorkerPage />;
   if (route === "monitor") return <MonitorPage />;
   if (route === "report") return <ReportPage />;

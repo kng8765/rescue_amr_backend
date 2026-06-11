@@ -31,7 +31,7 @@ LOCAL_DB = {
 def fetch_from_supabase():
     """Supabase survivors 테이블에서 인적정보 조회 (face 제외)"""
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    res = client.table("survivors").select("id, name, sex, phone_number").execute()
+    res = client.table("survivors").select("id, name, sex, phone_number, face").execute()
     return res.data
 
 

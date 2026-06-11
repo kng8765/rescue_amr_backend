@@ -44,7 +44,7 @@ class VisionDbBridge(Node):
             "detected_y": msg.pose.position.y,
             "similarity": float(msg.confidence),
             "robot_id": self.robot_id,
-            "img_path": f"/workspace/app/static/img/captured/{msg.class_name}.jpg",
+            "face": f"/workspace/app/static/img/captured/{msg.class_name}.jpg",
         }
 
         try:

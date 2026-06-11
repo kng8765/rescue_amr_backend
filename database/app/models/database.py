@@ -52,6 +52,9 @@ class Survivor(db.Model):
     # YOLO/FaceNet 등에서 추출한 256차원 얼굴 임베딩 벡터 저장 공간
     face_vector = db.Column(Vector(512), nullable=True)
 
+    # Supabase 이미지 URL 저장용
+    face = db.Column(db.String(255), nullable=True)
+
 
 # 고도화된 실시간 구조 로그 테이블
 class SurvivorLog(db.Model):
