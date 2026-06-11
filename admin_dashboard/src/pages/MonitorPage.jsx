@@ -461,10 +461,12 @@ export default function MonitorPage() {
             <div className="ring-row" style={{ justifyContent: "center" }}>
               <Ring
                 percent={(() => {
-                  // 로봇들의 coverage_ratio(0~1) 평균 → 탐사 완료율 %
-                  const withData = robots.filter(r => r.coverage_ratio != null);
-                  if (withData.length === 0) return null;
-                  const avg = withData.reduce((s, r) => s + r.coverage_ratio, 0) / withData.length;
+                  // 라이브 CoverageStatus(coverage_status) 우선, 없으면 DB coverage_ratio
+                  const ratios = robots
+                    .map(r => liveTelemetry[r.id]?.coverage_ratio ?? r.coverage_ratio)
+                    .filter(v => v != null);
+                  if (ratios.length === 0) return null;
+                  const avg = ratios.reduce((s, v) => s + v, 0) / ratios.length;
                   return Math.min(100, Math.round(avg * 100));
                 })()}
                 tone="rescue"
@@ -535,6 +537,13 @@ export default function MonitorPage() {
               else if (data.type === "map") {
                 // SLAM이 실시간 작성 중인 맵(벽 점유 셀) — 탐색 진행에 따라 갱신
                 setMapWalls(prev => ({ ...prev, [id]: data.walls }));
+              }
+              else if (data.type === "coverage_status") {
+                // AMR 계약 CoverageStatus — 탐색 진행률/모드 라이브 반영
+                setLiveTelemetry(prev => ({
+                  ...prev,
+                  [id]: { ...prev[id], coverage_ratio: data.coverage_ratio, mode: data.mode }
+                }));
               }
             }}
           />

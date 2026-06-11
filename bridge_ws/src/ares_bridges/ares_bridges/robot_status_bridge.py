@@ -8,14 +8,16 @@ import numpy as np
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry, OccupancyGrid  # 💡 OccupancyGrid 추가
 
+# AMR팀 인터페이스 계약: 탐지는 rescue_interfaces/SurvivorDetectionArray
+# (topic: /robot5/survivor/detections). 구버전 interfaces/TargetPose 대체.
 try:
-    from interfaces.msg import TargetPose
+    from rescue_interfaces.msg import SurvivorDetectionArray
 
-    HAS_TARGET_POSE = True
+    HAS_DETECTIONS = True
 except ImportError:
-    HAS_TARGET_POSE = False
+    HAS_DETECTIONS = False
     print(
-        "⚠️ [주의] interfaces/TargetPose 모듈이 없어 YOLO 탐지 DB 전송 기능이 비활성화됩니다."
+        "⚠️ [주의] rescue_interfaces/SurvivorDetectionArray 모듈이 없어 탐지 DB 전송이 비활성화됩니다."
     )
 
 FLASK_BASE = "http://127.0.0.1:8001/api"
@@ -61,11 +63,11 @@ class RobotStatusBridge(Node):
             OccupancyGrid, f"/{self.robot_id}/map", self.map_callback, map_qos
         )
 
-        if HAS_TARGET_POSE:
-            self.yolo_sub = self.create_subscription(
-                TargetPose,
-                f"/{self.robot_id}/yolo/target_pose",
-                self.yolo_detection_callback,
+        if HAS_DETECTIONS:
+            self.det_sub = self.create_subscription(
+                SurvivorDetectionArray,
+                f"/{self.robot_id}/survivor/detections",
+                self.detections_callback,
                 qos_profile=sensor_qos,
             )
 
@@ -166,15 +168,21 @@ class RobotStatusBridge(Node):
             f"{FLASK_BASE}/robots/{self.robot_id}/nav_success", data, "BT 임무완료"
         )
 
-    def yolo_detection_callback(self, msg):
-        data = {
-            "id": msg.class_name,
-            "detected_x": msg.pose.position.x,
-            "detected_y": msg.pose.position.y,
-            "similarity": float(msg.confidence),
-            "robot_id": self.robot_id,
-        }
-        self._send_to_flask(f"{FLASK_BASE}/survivor-logs", data, "AI 식별")
+    def detections_callback(self, msg):
+        # AMR 계약(SurvivorDetectionArray): class_name은 person/exit_sign.
+        # 사람 탐지만 /survivor-logs로 적재(신원은 중앙에서 판별 → 미식별로 기록).
+        for det in msg.detections:
+            if det.class_name != "person":
+                continue  # exit_sign 등은 goal 후보로 별도 처리
+            data = {
+                "id": None,  # 신원 미상(중앙 식별 전)
+                "detected_x": float(det.pose.pose.position.x),
+                "detected_y": float(det.pose.pose.position.y),
+                "similarity": float(det.confidence),
+                "robot_id": self.robot_id,
+                "img_path": det.image_uri or None,
+            }
+            self._send_to_flask(f"{FLASK_BASE}/survivor-logs", data, "탐지")
 
     def _send_to_flask(self, url, data, label):
         try:

@@ -11,6 +11,13 @@ from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import Image, CompressedImage, BatteryState
 from geometry_msgs.msg import PoseStamped
 
+# AMR 계약: 탐색 진행은 rescue_interfaces/CoverageStatus (topic: /coverage/status)
+try:
+    from rescue_interfaces.msg import CoverageStatus
+    _HAS_COVERAGE_STATUS = True
+except ImportError:
+    _HAS_COVERAGE_STATUS = False
+
 from cv_bridge import CvBridge
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
@@ -82,15 +89,28 @@ class WebrtcBridge(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
+        # 센서/telemetry용 — BEST_EFFORT 구독은 RELIABLE·BEST_EFFORT publisher 둘 다 호환.
+        # (battery·pose는 sensor 계열이라 RELIABLE 구독 시 미수신 위험)
+        sensor_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
         self.create_subscription(
             Image, self.topic_name, self.image_callback, qos
         )
         self.create_subscription(
-            BatteryState, f"/{self.robot_id}/battery_state", self.battery_callback, 10
+            BatteryState, f"/{self.robot_id}/battery_state", self.battery_callback, sensor_qos
         )
+        # AMR 계약: 경로는 /coverage/path (로봇 prefix 없음), 진행은 /coverage/status
         self.create_subscription(
-            Path, f"/{self.robot_id}/coverage/path", self.path_callback, 10
+            Path, "/coverage/path", self.path_callback, 10
         )
+        if _HAS_COVERAGE_STATUS:
+            self.create_subscription(
+                CoverageStatus, "/coverage/status", self.coverage_status_callback, 10
+            )
+        # (비계약 확장) 카메라 스윕 셀 오버레이 — AMR이 발행하면 표시, 없으면 무시
         self.create_subscription(
             OccupancyGrid,
             f"/{self.robot_id}/camera_coverage",
@@ -99,7 +119,7 @@ class WebrtcBridge(Node):
         )
         # 로봇 현재 위치 (map 프레임 PoseStamped) → DataChannel pose
         self.create_subscription(
-            PoseStamped, self.pose_topic, self.pose_callback, 10
+            PoseStamped, self.pose_topic, self.pose_callback, sensor_qos
         )
         # SLAM 지도 (탐색 중 실시간으로 자라는 맵) → DataChannel map (1초 throttle)
         self.create_subscription(
@@ -154,6 +174,18 @@ class WebrtcBridge(Node):
             coverage_points.append({"x": float(real_x), "y": float(real_y)})
 
         self._broadcast(json.dumps({"type": "camera_coverage", "points": coverage_points}))
+
+    def coverage_status_callback(self, msg):
+        # AMR 계약 CoverageStatus → 탐색 모드/진행률/목표 진척
+        self._broadcast(json.dumps({
+            "type": "coverage_status",
+            "mode": msg.mode,
+            "state": msg.state,
+            "total_goals": int(msg.total_goals),
+            "visited_goals": int(msg.visited_goals),
+            "coverage_ratio": round(float(msg.coverage_ratio), 4),
+            "message": msg.message,
+        }))
 
     def battery_callback(self, msg):
         if not active_datachannels:
