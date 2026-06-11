@@ -11,6 +11,7 @@ admin_dashboard/.env.production.local
 admin_dashboard/npm-debug.log*
 admin_dashboard/yarn-debug.log*
 admin_dashboard/yarn-error.log*
+database/app/static/maps/*.png
 
 # ==========================================
 # 2. ROS 2 Workspace Directories (필수 제외) 
