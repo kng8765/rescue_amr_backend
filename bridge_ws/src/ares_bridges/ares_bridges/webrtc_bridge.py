@@ -46,10 +46,9 @@ class RosImageTrack(MediaStreamTrack):
         if self._start_time is None:
             self._start_time = loop.time()
 
-        self._pts += self._pts_step
-        await asyncio.sleep(
-            max(0, (self._start_time + (self._pts / 90000)) - loop.time())
-        )
+        # 목표 fps로 페이싱하되 pts는 '실제 경과시간' 기반 → 지연 누적 없음(실시간성 회복).
+        # (기존엔 고정 스케줄이라 프레임이 밀리면 영상 타임라인이 뒤처져 지연이 쌓임)
+        await asyncio.sleep(1.0 / 15.0)
 
         with frame_lock:
             img = (
@@ -61,7 +60,8 @@ class RosImageTrack(MediaStreamTrack):
         frame = VideoFrame.from_ndarray(
             cv2.cvtColor(img, cv2.COLOR_BGR2RGB), format="rgb24"
         )
-        frame.pts, frame.time_base = self._pts, Fraction(1, 90000)
+        frame.pts = int((loop.time() - self._start_time) * 90000)
+        frame.time_base = Fraction(1, 90000)
         return frame
 
 
