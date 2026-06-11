@@ -2,18 +2,27 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
-    # 실행 시 로봇 ID를 동적으로 받을 수 있도록 설정 (기본값: robot5)
+    # 실행 시 로봇 ID와 포트를 동적으로 받음 (로봇별 1포트 — 견고한 분리 구조)
+    #   robot5(TB_05): ros2 launch ares_bridges ares_bridge.launch.py robot_id:=robot5 port:=8002
+    #   두 번째 로봇 : ros2 launch ares_bridges ares_bridge.launch.py robot_id:=robot1 port:=8003
     robot_id = LaunchConfiguration('robot_id', default='robot5')
+    port = LaunchConfiguration('port', default='8002')
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'robot_id',
             default_value='robot5',
-            description='ID of the robot to bridge'
+            description='ID of the robot to bridge (e.g. robot1, robot5)'
         ),
-        
+        DeclareLaunchArgument(
+            'port',
+            default_value='8002',
+            description='WebRTC 브릿지 /offer 포트 (로봇별 고유 — 프론트 idx0=8002, idx1=8003)'
+        ),
+
         # 1. WebRTC 영상/데이터 스트리밍 브릿지
         Node(
             package='ares_bridges',
@@ -21,7 +30,7 @@ def generate_launch_description():
             name='webrtc_bridge',
             output='screen',
             parameters=[{
-                'port': 8002,
+                'port': ParameterValue(port, value_type=int),
                 'topic': ['/', robot_id, '/survivor/annotated'], # 압축 토픽이 복구되면 /compressed 추가
                 'robot': robot_id
             }]

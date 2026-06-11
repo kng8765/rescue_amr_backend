@@ -172,10 +172,12 @@ def get_robots():
                     {
                         "id": r.id,
                         "status": r.status,
+                        "mode": r.mode,
+                        "battery": r.battery,
                         "pos_x": r.pos_x,
                         "pos_y": r.pos_y,
-                        "explored_area": r.explored_area,
-                        "total_area": r.total_area,
+                        "coverage_ratio": r.coverage_ratio,
+                        "updated_at": r.updated_at.isoformat() if r.updated_at else None,
                     }
                     for r in robots
                 ],
@@ -228,13 +230,13 @@ def update_robot_pose(robot_id):
     return jsonify({"ok": True}), 200
 
 
-@api_bp.route("/robots/<robot_id>/exploration", methods=["POST"])
-def update_robot_exploration(robot_id):
+@api_bp.route("/robots/<robot_id>/coverage", methods=["POST"])
+def update_robot_coverage(robot_id):
     data = request.get_json()
-    RescueAMRService.update_exploration(
+    RescueAMRService.update_coverage(
         robot_id=robot_id,
-        explored_area=data.get("explored_area", 0.0),
-        total_area=data.get("total_area", 1.0),
+        coverage_ratio=data.get("coverage_ratio", 0.0),
+        mode=data.get("mode"),
     )
     return jsonify({"ok": True}), 200
 

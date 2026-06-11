@@ -61,12 +61,12 @@ def clear_room(room):
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'service': 'JARVIS WebRTC Signaling'})
+    return jsonify({'status': 'ok', 'service': 'ARES WebRTC Signaling'})
 
 if __name__ == '__main__':
     import logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
-    print("🌐 JARVIS WebRTC 시그널링 서버 시작")
+    print("🌐 ARES WebRTC 시그널링 서버 시작")
     print("   http://0.0.0.0:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)

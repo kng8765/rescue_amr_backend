@@ -6,7 +6,7 @@ webrtc_server.py
 → /gesture_event ROS2 토픽 발행
 
 [실행]
-    source /home/kng/cobot_ws/install/setup.bash
+    cd ~/rescue_amr_project/rescue_amr_backend/webrtc
     python3 webrtc_server.py
 """
 
@@ -37,8 +37,8 @@ except ImportError:
     print("⚠️  ROS2 없음 — 콘솔 출력 모드")
 
 import os
-SIGNALING_URL = os.getenv('SIGNALING_URL', 'https://jarvis-signaling-production.up.railway.app')
-ROOM          = "jarvis-gesture"
+SIGNALING_URL = os.getenv('SIGNALING_URL', 'http://127.0.0.1:5000')
+ROOM          = os.getenv('WEBRTC_GESTURE_ROOM', 'ares-gesture')
 STUN_SERVER   = "stun:stun.l.google.com:19302"
 
 # ── 로그 헬퍼 (줄 덮어쓰기 없이 출력) ────────────────────────────────────────
@@ -315,7 +315,7 @@ async def run_webrtc():
 
 
 async def main():
-    log("🤖 JARVIS WebRTC 제스처 서버 시작")
+    log("🤖 ARES WebRTC 제스처 서버 시작")
     log(f"   시그널링: {SIGNALING_URL}")
     log(f"   Room:     {ROOM}")
 

@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AresShell from "../AresShell";
 import { navigate } from "../aresRouting";
 import useClock from "../useClock";
 
 const API_BASE = "http://localhost:8001/api";
-// 로봇 인덱스(0-based) → WebRTC 브릿지 포트
-// TB_01 (192.168.108.101): run_ares_vision.sh TB_01 8002
-// TB_05 (192.168.108.105): run_ares_vision.sh TB_05 8003
+// 로봇 인덱스(0-based) → WebRTC 브릿지 포트 (로봇별 1포트 — 견고한 분리 구조)
+// 브릿지 실행(정본): ros2 launch ares_bridges ares_bridge.launch.py robot_id:=<id> port:=<port>
+//   idx0 → port 8002 → 예: robot5(TB_05, 192.168.108.105)
+//   idx1 → port 8003 → 예: 두 번째 로봇
+// ROS 네트워크(Fast DDS): ROS_DOMAIN_ID=1, RMW=rmw_fastrtps_cpp, ROS_SUPER_CLIENT=True
+//   ROS_DISCOVERY_SERVER=";192.168.108.105:11811;" (TB_05) / ";192.168.108.101:11811;" (TB_01)
 const WEBRTC_PORT = (idx) => 8002 + idx;
 const WEBRTC_BASE = (idx) => `http://localhost:${WEBRTC_PORT(idx)}`;
 const ICE_SERVERS = [
@@ -204,8 +207,10 @@ export default function MonitorPage() {
   const [robots, setRobots] = useState([]);        // rescue_robots 테이블 — 항상 배열
   const [liveTelemetry, setLiveTelemetry] = useState({});
   const [survivorStats, setSurvivorStats] = useState({ confirmed: 0, unknown: 0 });
+  const [registeredTotal, setRegisteredTotal] = useState(0); // sync 시 supabase에서 읽어온 등록 총원
   const [robotPaths, setRobotPaths] = useState({});
   const [cameraCoverage, setCameraCoverage] = useState({});
+  const [mapWalls, setMapWalls] = useState({}); // SLAM 실시간 점유격자(벽) — WebRTC map
 
   // 연결 상태 3단계 분리
   // backend: 'ok' | 'error'   — Flask 서버 자체 응답 여부
@@ -220,13 +225,14 @@ export default function MonitorPage() {
 
   // 로봇 상태 + 생존자 통계 폴링
   const fetchStatus = useCallback(async () => {
-    let robotRes, survivorRes;
+    let robotRes, survivorRes, registeredRes;
 
     // ── 1단계: Flask 서버 응답 여부 ─────────────────────────────────
     try {
-      [robotRes, survivorRes] = await Promise.all([
+      [robotRes, survivorRes, registeredRes] = await Promise.all([
         fetch(`${API_BASE}/robots`),
         fetch(`${API_BASE}/survivor-logs?limit=200`),
+        fetch(`${API_BASE}/survivors`),  // 등록 명단(벡터 제외) — 총원 카운트용
       ]);
     } catch {
       // fetch 자체 실패 = 서버가 꺼져있음
@@ -248,12 +254,18 @@ export default function MonitorPage() {
       setConnStatus({ backend: 'ok', db: 'error' });
     }
 
-    // ── 3단계: 생존자 로그 ───────────────────────────────────────────
+    // ── 3단계: 생존자 로그 (식별/미식별) ─────────────────────────────
     if (survivorRes.ok) {
       const logs = await survivorRes.json();
       const confirmed = new Set(logs.filter((l) => l.survivor_id).map((l) => l.survivor_id)).size;
       const unknown = logs.filter((l) => !l.survivor_id).length;
       setSurvivorStats({ confirmed, unknown });
+    }
+
+    // ── 4단계: 등록 총원 (sync된 supabase 신원자 수) ─────────────────
+    if (registeredRes && registeredRes.ok) {
+      const list = await registeredRes.json();
+      setRegisteredTotal(Array.isArray(list) ? list.length : 0);
     }
   }, []);
 
@@ -263,9 +275,53 @@ export default function MonitorPage() {
     return () => clearInterval(id);
   }, [fetchStatus]);
 
-  // 로봇 위치를 맵 퍼센트로 변환 (pos_x/y가 미터 단위라 가정, 맵 범위 0~20m)
-  const MAP_RANGE = 20;
-  const toMapPct = (v) => v != null ? Math.min(95, Math.max(5, (v / MAP_RANGE) * 100)) : null;
+  // 라이브 데이터(맵 벽·커버리지·경로·로봇)의 월드 좌표 범위를 자동 산출해 화면에 맞춤.
+  // 고정 범위(±음수 미처리) 대신 동적 fit → 원점/음수 좌표도 정확, 종횡비 유지.
+  // 화면 맞춤 범위는 '맵/커버리지/경로'(저빈도)로만 산출 — 로봇 pose(5Hz)는 제외해
+  // pose 갱신마다 범위·레이어 메모가 무효화되는 걸 방지(로봇은 맵 안에 있으므로 충분).
+  const mapBounds = useMemo(() => {
+    const xs = [], ys = [];
+    const push = (p) => {
+      if (p && p.x != null && p.y != null && !isNaN(p.x) && !isNaN(p.y)) { xs.push(p.x); ys.push(p.y); }
+    };
+    Object.values(mapWalls).forEach(a => (a || []).forEach(push));
+    Object.values(cameraCoverage).forEach(a => (a || []).forEach(push));
+    Object.values(robotPaths).forEach(a => (a || []).forEach(push));
+    if (xs.length === 0) return null;
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 2) * 1.15; // 여유 15%
+    return { cx, cy, span };
+  }, [mapWalls, cameraCoverage, robotPaths]);
+
+  // 월드(m) → 화면 % (중심정렬·종횡비 유지·Y축 반전: ROS +y 위 → 화면 위)
+  const toX = (x) => (x == null || !mapBounds) ? null : ((x - mapBounds.cx) / mapBounds.span + 0.5) * 100;
+  const toY = (y) => (y == null || !mapBounds) ? null : (0.5 - (y - mapBounds.cy) / mapBounds.span) * 100;
+
+  // 지도 레이어를 메모이즈 — 해당 데이터가 바뀔 때만 다시 그림.
+  // (pose/배터리 5Hz 갱신 때마다 수천 개 점을 리렌더하던 게 끊김 원인)
+  const wallEls = useMemo(() => Object.keys(mapWalls).flatMap(id =>
+    (mapWalls[id] || []).map((p, idx) => {
+      const x = toX(p.x), y = toY(p.y);
+      if (x === null || y === null) return null;
+      return <rect key={`${id}-w-${idx}`} x={x - 0.4} y={y - 0.4} width="0.8" height="0.8" fill="rgba(30,41,59,0.9)" />;
+    })
+  ), [mapWalls, mapBounds]);
+
+  const coverageEls = useMemo(() => Object.keys(cameraCoverage).flatMap(id =>
+    (cameraCoverage[id] || []).map((p, idx) => {
+      const x = toX(p.x), y = toY(p.y);
+      if (x === null || y === null) return null;
+      return <rect key={`${id}-cov-${idx}`} x={x - 1.1} y={y - 1.1} width="2.2" height="2.2" fill="rgba(46,204,113,0.18)" />;
+    })
+  ), [cameraCoverage, mapBounds]);
+
+  const pathEls = useMemo(() => Object.keys(robotPaths).map(id => {
+    const pts = (robotPaths[id] || [])
+      .map(p => { const x = toX(p.x), y = toY(p.y); return (x === null || y === null) ? null : `${x},${y}`; })
+      .filter(Boolean).join(" ");
+    return pts ? <polyline key={`${id}-path`} points={pts} fill="none" stroke="rgba(21,101,192,0.85)" strokeWidth="0.6" strokeLinejoin="round" /> : null;
+  }), [robotPaths, mapBounds]);
 
   // 상태별 색상
   const robotColor = (status) => ({
@@ -294,79 +350,18 @@ export default function MonitorPage() {
                   {connStatus.backend === 'error' && <span style={{ color: 'var(--red-light)', fontSize: '0.75rem' }}>⚠ 서버 오프라인</span>}{connStatus.db === 'empty' && <span style={{ color: '#f59e0b', fontSize: '0.75rem' }}>⚠ 로봇 미연결</span>}
                 </div>
                 <div className="map-area">
-                  {/* flask static 폴더의 실시간 PNG 지도로 바인딩 */}
-                  <img 
-                    src={`http://localhost:8001/static/maps/robot5_map.png?t=${Date.now()}`} // 캐시 방지 타임스탬프 탑재
-                    alt="ARES SLAM MAP"
-                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }}
-                    onError={(e) => {
-                      // 지도가 아직 생성 전이라 404가 뜰 경우를 대비한 기본 그리드 배경 방어선
-                      e.target.style.display = 'none'; 
-                    }}
-                  />
+                  {/* 라이브 SLAM 지도: 정적 PNG 제거 — WebRTC DataChannel(map/coverage/path)로 실시간 렌더 */}
                   <div className="map-svg-bg" style={{ position: "absolute", inset: 0, zIndex: 0 }} />
-                  
-                  {/* WebRTC로 들어오는 카메라 가시 영역 레이어 드로잉 */}
-                  {Object.keys(cameraCoverage).map((id) => {
-                    const points = cameraCoverage[id] || [];
-                    return points.map((p, idx) => {
-                      const pctX = toMapPct(p.x);
-                      const pctY = toMapPct(p.y);
-                      if (pctX === null || pctY === null) return null;
-                      return (
-                        <div
-                          key={`${id}-cov-${idx}`}
-                          style={{
-                            position: "absolute",
-                            left: `${pctX}%`,
-                            top: `${pctY}%`,
-                            width: "12px",
-                            height: "12px",
-                            transform: "translate(-50%, -50%)",
-                            background: "rgba(46, 204, 113, 0.15)", // 투명한 초록색 음영 칠하기
-                            borderRadius: "50%",
-                            pointerEvents: "none",
-                            zIndex: 3,
-                          }}
-                        />
-                      );
-                    });
-                  })}
 
                   {/* 실시간 궤적을 그리는 SVG 오버레이 선 생성 */}
-                  <svg 
+                  <svg
                       style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 5 }}
-                      viewBox="0 0 100 100" 
+                      viewBox="0 0 100 100" preserveAspectRatio="none"
                     >
-                      {/* [추가] 카메라 가시 영역을 연한 초록색 다각형(또는 선)으로 채우기 */}
-                      {Object.keys(cameraCoverage).map((id) => {
-                        const points = cameraCoverage[id] || [];
-                        if (points.length < 2) return null;
-
-                        const coveragePointsStr = points
-                          .map(p => {
-                            const xPct = toMapPct(p.x);
-                            // 💡 만약 지도가 뒤집혀서 나온다면 100 - toMapPct(p.y) 형태로 Y축을 반전해보세요.
-                            const yPct = toMapPct(p.y); 
-                            return `${xPct},${yPct}`;
-                          })
-                          .join(" ");
-
-                        return (
-                          <polygon
-                            key={`${id}-coverage`}
-                            points={coveragePointsStr}
-                            fill="rgba(46, 204, 113, 0.15)" // 이미지에 있던 투명한 초록색 음영
-                            stroke="rgba(46, 204, 113, 0.5)" // 경계선은 조금 더 진하게
-                            strokeWidth="1"
-                          />
-                        );
-                      })}
-
-                      {/* 기존 로봇 궤적 (polyline) 코드 위치 */}
-                      {Object.keys(robotPaths).map((id) => {
-                        // ... 기존 polyline 렌더링 코드
-                      })}
+                      {/* ① 커버리지(초록 면) ② SLAM 맵(벽 점) ③ 경로(선) — 데이터 바뀔 때만 다시 그림 */}
+                      {coverageEls}
+                      {wallEls}
+                      {pathEls}
                     </svg>
 
                   {/* DB에서 받은 로봇 마커 */}
@@ -380,9 +375,9 @@ export default function MonitorPage() {
                     const currentX = liveTelemetry[robot.id]?.pos_x ?? robot.pos_x;
                     const currentY = liveTelemetry[robot.id]?.pos_y ?? robot.pos_y;
                     
-                    const x = toMapPct(currentX);
-                    const y = toMapPct(currentY);
-                    
+                    const x = toX(currentX);
+                    const y = toY(currentY);
+
                     // 💡 좌표 가독성 오류나 유실 시 렌더링 스킵 방어선
                     if (x === null || y === null || isNaN(x) || isNaN(y)) return null;
                     
@@ -422,10 +417,14 @@ export default function MonitorPage() {
           <PanelHeader title="구조대상자 식별 현황" tone="green" />
           <div className="status-dashboard">
 
-            {/* 생존자 카운트 */}
-            <div className="casualty-grid-lg">
+            {/* 생존자 카운트 — 총 신원자(등록) / 식별 완료 / 미식별 */}
+            <div className="casualty-grid-lg" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <div className="casualty-box-lg">
+                <div className="casualty-num-lg">{registeredTotal}</div>
+                <div className="casualty-label-lg">총 신원자</div>
+              </div>
               <div className="casualty-box-lg survivor">
-                <div className="casualty-num-lg">{survivorStats.confirmed}</div>
+                <div className="casualty-num-lg">{survivorStats.confirmed}<span style={{ fontSize: "0.55em", opacity: 0.6 }}> / {registeredTotal}</span></div>
                 <div className="casualty-label-lg">식별 완료</div>
               </div>
               <div className="casualty-box-lg unknown">
@@ -462,12 +461,11 @@ export default function MonitorPage() {
             <div className="ring-row" style={{ justifyContent: "center" }}>
               <Ring
                 percent={(() => {
-                  // 모든 로봇의 explored_area / total_area 합산
-                  const withData = robots.filter(r => r.explored_area != null && r.total_area > 0);
+                  // 로봇들의 coverage_ratio(0~1) 평균 → 탐사 완료율 %
+                  const withData = robots.filter(r => r.coverage_ratio != null);
                   if (withData.length === 0) return null;
-                  const explored = withData.reduce((s, r) => s + r.explored_area, 0);
-                  const total    = withData.reduce((s, r) => s + r.total_area, 0);
-                  return Math.min(100, Math.round((explored / total) * 100));
+                  const avg = withData.reduce((s, r) => s + r.coverage_ratio, 0) / withData.length;
+                  return Math.min(100, Math.round(avg * 100));
                 })()}
                 tone="rescue"
                 label="탐사"
@@ -526,19 +524,17 @@ export default function MonitorPage() {
               }
               else if (data.type === "camera_coverage") {
                 setCameraCoverage(prev => ({ ...prev, [id]: data.points }));
-
-                // 2. [추가] 경로 데이터의 가장 마지막 좌표(최신 위치)를 캡처하여 로봇 마커 위치도 실시간 강제 갱신
-                if (data.poses && data.poses.length > 0) {
-                  const latestPose = data.poses[data.poses.length - 1];
-                  setLiveTelemetry(prev => ({
-                    ...prev,
-                    [id]: {
-                      ...prev[id],
-                      pos_x: latestPose.x,
-                      pos_y: latestPose.y
-                    }
-                  }));
-                }
+              }
+              else if (data.type === "pose") {
+                // 로봇 현재 위치(map 좌표계) — ROS pose 토픽 기반 (정식 좌표 + 방향)
+                setLiveTelemetry(prev => ({
+                  ...prev,
+                  [id]: { ...prev[id], pos_x: data.x, pos_y: data.y, yaw: data.yaw }
+                }));
+              }
+              else if (data.type === "map") {
+                // SLAM이 실시간 작성 중인 맵(벽 점유 셀) — 탐색 진행에 따라 갱신
+                setMapWalls(prev => ({ ...prev, [id]: data.walls }));
               }
             }}
           />

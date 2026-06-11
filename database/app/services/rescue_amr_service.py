@@ -50,18 +50,16 @@ class RescueAMRService:
         db.session.commit()  
 
     @staticmethod
-    def update_exploration(robot_id: str, explored_area: float, total_area: float):
-        """탐사 완료율 갱신 — 100% 도달 시 SUCCESS로 전환"""
+    def update_coverage(robot_id: str, coverage_ratio: float, mode: str = None):
+        """탐색 진행률(0~1)·모드 갱신 — 100% 도달 시 SUCCESS로 전환 (CoverageStatus 기반)"""
         robot = RescueAmrRepository.get_robot_by_id(robot_id)
         if not robot:
             robot = RescueRobot(id=robot_id)
 
-        robot.explored_area = explored_area  # 💡 [추가] 모델에 값 할당
-        robot.total_area = total_area  # 💡 [추가] 모델에 값 할당
-
-        if total_area > 0:
-            pct = explored_area / total_area
-            robot.status = "SUCCESS" if pct >= 1.0 else "MOVING"
+        robot.coverage_ratio = coverage_ratio
+        if mode:
+            robot.mode = mode
+        robot.status = "SUCCESS" if coverage_ratio >= 1.0 else "MOVING"
 
         RescueAmrRepository.save_robot(robot)
-        db.session.commit()  
+        db.session.commit()

@@ -24,13 +24,17 @@ def init_db(app):
 class RescueRobot(db.Model):
     __tablename__ = "rescue_robots"
     id = db.Column(db.String, primary_key=True, index=True)
-    status = db.Column(db.String, default="IDLE")  # IDLE, MOVING, SUCCESS, ERROR
-    battery = db.Column(db.Integer, nullable=True)
-    pos_x = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String, default="IDLE")   # IDLE, MOVING, SUCCESS, ERROR
+    mode = db.Column(db.String, nullable=True)       # explore, revisit, idle (CoverageStatus.mode)
+    battery = db.Column(db.Integer, nullable=True)   # %
+    pos_x = db.Column(db.Float, nullable=True)       # map 프레임
     pos_y = db.Column(db.Float, nullable=True)
-
-    explored_area = db.Column(db.Float, nullable=True, default=0.0)
-    total_area = db.Column(db.Float, nullable=True, default=0.0)
+    coverage_ratio = db.Column(db.Float, nullable=True, default=0.0)  # 0~1 탐색 진행률
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )  # 최종 갱신 시각(로봇 오프라인 감지)
 
 class IncidentLog(db.Model):
     __tablename__ = "incident_logs"

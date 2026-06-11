@@ -21,7 +21,6 @@ setup(
     entry_points={
         "console_scripts": [
             "yolo_core_node = yolo.core.yolo_core_node:main",
-            "yolo_webrtc_bridge = yolo.yolo_webrtc_bridge:main",
             "train = yolo.train:main",
             "yolo_nav = yolo.yolo_nav:main",
         ],

@@ -3,7 +3,8 @@
 webrtc_vision_server.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [구독]
-  /robot5/oakd/rgb/image_raw/compressed  → VideoTrack (OAK-D RGB 영상 스트리밍)
+  /robot5/survivor/annotated/compressed  → VideoTrack (OAK-D 주석 영상 스트리밍)
+  /robot5/survivor/annotated             → raw Image 모드에서 사용
   /yolo_detections  → DataChannel → 브라우저 (bbox 목록)
 
 [DataChannel 수신]
@@ -11,8 +12,7 @@ webrtc_vision_server.py
              (브라우저에서 OAK-D 영상 위 MediaPipe 호버 판정 결과)
 
 [실행]
-    source /home/kng/cobot_ws/install/setup.bash
-    python3 webrtc_vision_server.py
+    ./run_oakd_vision.sh robot5
 """
 
 import asyncio
@@ -55,9 +55,9 @@ except ImportError:
 
 import os
 SIGNALING_URL = os.getenv('SIGNALING_URL', 'http://127.0.0.1:5000')
-ROOM          = os.getenv('WEBRTC_ROOM', 'jarvis-vision')
+ROOM          = os.getenv('WEBRTC_ROOM', 'ares-vision-robot5')
 FPS           = 30
-IMAGE_TOPIC   = os.getenv('WEBRTC_IMAGE_TOPIC', '/robot5/oakd/rgb/image_raw/compressed')
+IMAGE_TOPIC   = os.getenv('WEBRTC_IMAGE_TOPIC', '/robot5/survivor/annotated/compressed')
 IMAGE_TYPE    = os.getenv('WEBRTC_IMAGE_TYPE', '').strip().lower()
 DETECTIONS_TOPIC = os.getenv('WEBRTC_DETECTIONS_TOPIC', '/yolo_detections')
 USE_PUBLIC_ICE = os.getenv('WEBRTC_USE_PUBLIC_ICE', '').lower() in ('1', 'true', 'yes')
@@ -515,7 +515,7 @@ async def run_webrtc():
 async def main():
     asyncio.get_running_loop().set_exception_handler(handle_loop_exception)
 
-    print("🤖 JARVIS WebRTC Vision 스트리밍 서버")
+    print("🤖 ARES WebRTC Vision 스트리밍 서버")
     print(f"   Room: {ROOM}\n")
     print(f"   ROS node: {NODE_NAME}")
     print(f"   Image topic: {IMAGE_TOPIC}")

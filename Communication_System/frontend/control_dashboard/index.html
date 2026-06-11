@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Control Voice Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <h1>Control Voice Dashboard</h1>
+          <p>후발 로봇 상단 Android 단말 음성 통신 상태</p>
+        </div>
+        <div class="status-cluster">
+          <span id="serverBadge" class="badge" data-state="offline">Server Disconnected</span>
+          <span id="callBadge" class="badge" data-state="idle">Call Idle</span>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="panel connection-panel">
+          <h2>Connection</h2>
+          <label>
+            Server
+            <input id="serverInput" value="ws://127.0.0.1:8000">
+          </label>
+          <label>
+            Client ID
+            <input id="clientIdInput" value="control-1">
+          </label>
+          <label>
+            Device ID
+            <input id="deviceIdInput" value="control-pc">
+          </label>
+          <div class="button-row">
+            <button id="connectButton" type="button">Connect</button>
+            <button id="disconnectButton" type="button" class="secondary">Disconnect</button>
+          </div>
+        </aside>
+
+        <section class="panel call-panel">
+          <div class="panel-header">
+            <h2>Voice Session</h2>
+            <span id="sessionId">No Session</span>
+          </div>
+          <div class="call-grid">
+            <div class="metric">
+              <span>Android Device</span>
+              <strong id="androidDevice">Waiting</strong>
+            </div>
+            <div class="metric">
+              <span>Follow Robot</span>
+              <strong>Robot Top Device</strong>
+            </div>
+            <div class="metric">
+              <span>Microphone</span>
+              <strong id="micState">Standby</strong>
+            </div>
+            <div class="metric">
+              <span>Speaker</span>
+              <strong id="speakerState">Standby</strong>
+            </div>
+          </div>
+          <div class="call-actions">
+            <button id="createSessionButton" type="button">Create Session</button>
+            <button id="startCallButton" type="button">Start Call</button>
+            <button id="endCallButton" type="button" class="danger">End Call</button>
+          </div>
+          <audio id="remoteAudio" autoplay playsinline></audio>
+        </section>
+
+        <section class="panel event-panel">
+          <h2>System Events</h2>
+          <div id="log" class="log"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="../shared.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

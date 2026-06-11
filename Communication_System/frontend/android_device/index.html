@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Robot Top Voice Device</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="device-shell">
+      <section class="status-hero">
+        <span id="serverState" class="pill" data-state="offline">SERVER OFFLINE</span>
+        <h1 id="callState">대기 중</h1>
+        <p>후발 로봇 상단 음성 단말</p>
+      </section>
+
+      <section class="device-grid">
+        <div class="tile">
+          <span>마이크</span>
+          <strong id="micState">대기</strong>
+        </div>
+        <div class="tile">
+          <span>스피커</span>
+          <strong id="speakerState">대기</strong>
+        </div>
+        <div class="tile">
+          <span>WiFi</span>
+          <strong>동일 AP</strong>
+        </div>
+        <div class="tile">
+          <span>배치</span>
+          <strong>로봇 상단</strong>
+        </div>
+      </section>
+
+      <section class="controls">
+        <label>
+          Server
+          <input id="serverInput" value="ws://127.0.0.1:8000">
+        </label>
+        <label>
+          Device ID
+          <input id="deviceIdInput" value="robot-top-phone">
+        </label>
+        <div class="button-row">
+          <button id="connectButton" type="button">Connect</button>
+          <button id="disconnectButton" type="button">Disconnect</button>
+        </div>
+      </section>
+
+      <audio id="remoteAudio" autoplay playsinline></audio>
+      <section id="log" class="log"></section>
+    </main>
+
+    <script src="../shared.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

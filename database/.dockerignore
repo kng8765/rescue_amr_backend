@@ -1,0 +1,9 @@
+# root 소유 postgres 볼륨 — 빌드 컨텍스트에서 제외 (권한 거부 방지)
+.db_data/
+pgadmin_config/
+# 파이썬/캐시 노이즈
+__pycache__/
+*.pyc
+.venv/
+venv/
+.git/
